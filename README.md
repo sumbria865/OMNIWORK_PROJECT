@@ -12,19 +12,6 @@ The system is built as a production-grade SaaS platform with role-based access c
 
 ---
 
-## Team
-
-| Name | Role |
-|---|---|
-| Ninad Gawade | Backend Lead — Auth, APIs, Payment, Cloudinary |
-| Sarthi Kanade | Database and Logic — Prisma schemas, Analytics APIs, Business logic |
-| Prinka Devi | Frontend Lead — UI, Kanban board, Dashboard, Chat UI |
-
-Guide: Prof. Pranav Nerurkar
-Institution: Sardar Patel Institute of Technology, Mumbai (Autonomous, affiliated to University of Mumbai)
-Academic Year: 2025-2026
-
----
 
 ## Tech Stack
 
