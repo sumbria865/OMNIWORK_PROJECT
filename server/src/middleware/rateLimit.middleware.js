@@ -18,4 +18,4 @@ const uploadLimiter = rateLimit({
   }
 })
 
-module.exports = { authLimiter, uploadLimiter } 
+module.exports = { authLimiter, uploadLimiter }

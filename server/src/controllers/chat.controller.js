@@ -7,7 +7,7 @@ const createChatRoom = async (req, res) => {
     const { name, type, projectId } = req.body
 
     if (type === 'PROJECT' && projectId) {
-      const existing = await prisma.chatRoom.findUnique({
+      const existing = await prisma.chatRoom.findFirst({
         where: { projectId }
       })
       if (existing) {
@@ -15,12 +15,26 @@ const createChatRoom = async (req, res) => {
       }
     }
 
+    if (type === 'GROUP' || type === 'DIRECT' || !type) {
+      const existing = await prisma.chatRoom.findFirst({
+        where: { name, type: type || 'GROUP' }
+      })
+      if (existing) {
+        return errorResponse(res, 'A room with this name already exists', 400)
+      }
+    }
+
+    const roomData = {
+      name,
+      type: type || 'GROUP',
+    }
+
+    if (type === 'PROJECT' && projectId) {
+      roomData.projectId = projectId
+    }
+
     const room = await prisma.chatRoom.create({
-      data: {
-        name,
-        type: type || 'GROUP',
-        projectId: projectId || null
-      },
+      data: roomData,
       include: {
         project: {
           select: { id: true, name: true }

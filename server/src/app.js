@@ -17,7 +17,7 @@ app.use(express.urlencoded({ extended: true, limit: '10mb' }))
 // Global rate limiter
 const globalLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 100,
+  max: 500,
   message: {
     success: false,
     message: 'Too many requests, please try again later.'
@@ -39,7 +39,7 @@ app.use('/api/chat', require('./routes/chat.routes'))
 app.use('/api/payments', require('./routes/payment.routes'))
 app.use('/api/analytics', require('./routes/analytics.routes'))
 app.use('/api/upload', require('./routes/upload.routes'))
-
+app.use('/api/notifications', require('./routes/notification.routes'))
 // Health check
 app.get('/api/health', (req, res) => {
   res.json({
