@@ -1,0 +1,507 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mongodb"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================================
+// MODULE 1 — AUTHENTICATION AND USER MANAGEMENT
+// ============================================================
+
+model User {
+  id             String    @id @default(auto()) @map("_id") @db.ObjectId
+  name           String
+  email          String    @unique
+  password       String
+  role           Role      @default(EMPLOYEE)
+  avatar         String?
+  isActive       Boolean   @default(true)
+  lastLogin      DateTime?
+  resetToken     String?
+  resetTokenExp  DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  // Relations
+  employee        Employee?
+  assignedTasks   Task[]         @relation("TaskAssignee")
+  createdTasks    Task[]         @relation("TaskCreator")
+  createdProjects Project[]      @relation("ProjectCreator")
+  projectMembers  ProjectMember[]
+  sentMessages    Message[]
+  notifications   Notification[]
+  expenses        Expense[]
+  payments        Payment[]
+  activityLogs    ActivityLog[]
+  leaveRequests   Leave[]
+
+  @@map("users")
+}
+
+enum Role {
+  ADMIN
+  MANAGER
+  EMPLOYEE
+}
+
+// ============================================================
+// MODULE 3 — ERP / HR MANAGEMENT
+// ============================================================
+
+model Employee {
+  id             String      @id @default(auto()) @map("_id") @db.ObjectId
+  userId         String      @unique @db.ObjectId
+  employeeCode   String      @unique
+  designation    String
+  department     String
+  phone          String?
+  address        String?
+  dateOfJoining  DateTime
+  dateOfBirth    DateTime?
+  salary         Float?
+  bankAccount    String?
+  emergencyContact String?
+  documents      String[]
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
+
+  // Relations
+  user           User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  attendances    Attendance[]
+  leaves         Leave[]
+  performances   Performance[]
+
+  @@map("employees")
+}
+
+model Attendance {
+  id          String           @id @default(auto()) @map("_id") @db.ObjectId
+  employeeId  String           @db.ObjectId
+  date        DateTime
+  checkIn     DateTime?
+  checkOut    DateTime?
+  status      AttendanceStatus @default(PRESENT)
+  workHours   Float?
+  notes       String?
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+
+  // Relations
+  employee    Employee         @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  @@map("attendances")
+}
+
+enum AttendanceStatus {
+  PRESENT
+  ABSENT
+  HALF_DAY
+  LATE
+  ON_LEAVE
+  HOLIDAY
+}
+
+model Leave {
+  id           String      @id @default(auto()) @map("_id") @db.ObjectId
+  employeeId   String      @db.ObjectId
+  userId       String      @db.ObjectId
+  leaveType    LeaveType
+  startDate    DateTime
+  endDate      DateTime
+  totalDays    Float
+  reason       String
+  status       LeaveStatus @default(PENDING)
+  approvedBy   String?     @db.ObjectId
+  approvedAt   DateTime?
+  rejectedBy   String?     @db.ObjectId
+  rejectedAt   DateTime?
+  remarks      String?
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+
+  // Relations
+  employee     Employee    @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  user         User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("leaves")
+}
+
+enum LeaveType {
+  CASUAL
+  SICK
+  EARNED
+  MATERNITY
+  PATERNITY
+  UNPAID
+}
+
+enum LeaveStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  CANCELLED
+}
+
+model Expense {
+  id           String        @id @default(auto()) @map("_id") @db.ObjectId
+  userId       String        @db.ObjectId
+  title        String
+  description  String?
+  amount       Float
+  category     ExpenseCategory
+  receiptUrl   String?
+  status       ExpenseStatus @default(PENDING)
+  approvedBy   String?       @db.ObjectId
+  approvedAt   DateTime?
+  rejectedBy   String?       @db.ObjectId
+  rejectedAt   DateTime?
+  remarks      String?
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+
+  // Relations
+  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("expenses")
+}
+
+enum ExpenseCategory {
+  TRAVEL
+  FOOD
+  ACCOMMODATION
+  EQUIPMENT
+  SOFTWARE
+  TRAINING
+  OTHER
+}
+
+enum ExpenseStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  REIMBURSED
+}
+
+model Performance {
+  id           String   @id @default(auto()) @map("_id") @db.ObjectId
+  employeeId   String   @db.ObjectId
+  reviewerId   String   @db.ObjectId
+  period       String
+  rating       Float
+  feedback     String?
+  goals        String[]
+  achievements String[]
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  // Relations
+  employee     Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  @@map("performances")
+}
+
+// ============================================================
+// MODULE 2 — PROJECT MANAGEMENT
+// ============================================================
+
+model Project {
+  id          String        @id @default(auto()) @map("_id") @db.ObjectId
+  name        String
+  description String?
+  status      ProjectStatus @default(ACTIVE)
+  priority    Priority      @default(MEDIUM)
+  startDate   DateTime?
+  endDate     DateTime?
+  budget      Float?
+  progress    Float         @default(0)
+  coverImage  String?
+  tags        String[]
+  createdById String        @db.ObjectId
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  // Relations
+  createdBy   User          @relation("ProjectCreator", fields: [createdById], references: [id])
+  members     ProjectMember[]
+  tasks       Task[]
+  sprints     Sprint[]
+  chatRoom    ChatRoom?
+  activityLogs ActivityLog[]
+
+  @@map("projects")
+}
+
+enum ProjectStatus {
+  ACTIVE
+  ON_HOLD
+  COMPLETED
+  CANCELLED
+  ARCHIVED
+}
+
+enum Priority {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+model ProjectMember {
+  id        String      @id @default(auto()) @map("_id") @db.ObjectId
+  projectId String      @db.ObjectId
+  userId    String      @db.ObjectId
+  role      MemberRole  @default(MEMBER)
+  joinedAt  DateTime    @default(now())
+
+  // Relations
+  project   Project     @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user      User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, userId])
+  @@map("project_members")
+}
+
+enum MemberRole {
+  OWNER
+  MANAGER
+  MEMBER
+  VIEWER
+}
+
+model Task {
+  id           String     @id @default(auto()) @map("_id") @db.ObjectId
+  projectId    String     @db.ObjectId
+  sprintId     String?    @db.ObjectId
+  title        String
+  description  String?
+  status       TaskStatus @default(TODO)
+  priority     Priority   @default(MEDIUM)
+  assigneeId   String?    @db.ObjectId
+  createdById  String     @db.ObjectId
+  dueDate      DateTime?
+  completedAt  DateTime?
+  estimatedHrs Float?
+  actualHrs    Float?
+  tags         String[]
+  attachments  String[]
+  position     Int        @default(0)
+  parentTaskId String?    @db.ObjectId
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+
+  // Relations
+  project      Project    @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  sprint       Sprint?    @relation(fields: [sprintId], references: [id])
+  assignee     User?      @relation("TaskAssignee", fields: [assigneeId], references: [id])
+  createdBy    User       @relation("TaskCreator", fields: [createdById], references: [id])
+  comments     Comment[]
+  parentTask   Task?      @relation("SubTasks", fields: [parentTaskId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  subTasks     Task[]     @relation("SubTasks")
+
+  @@map("tasks")
+}
+
+enum TaskStatus {
+  TODO
+  IN_PROGRESS
+  IN_REVIEW
+  DONE
+  BLOCKED
+}
+
+model Sprint {
+  id        String       @id @default(auto()) @map("_id") @db.ObjectId
+  projectId String       @db.ObjectId
+  name      String
+  goal      String?
+  status    SprintStatus @default(PLANNED)
+  startDate DateTime
+  endDate   DateTime
+  createdAt DateTime     @default(now())
+  updatedAt DateTime     @updatedAt
+
+  // Relations
+  project   Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  tasks     Task[]
+
+  @@map("sprints")
+}
+
+enum SprintStatus {
+  PLANNED
+  ACTIVE
+  COMPLETED
+  CANCELLED
+}
+
+model Comment {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  taskId    String   @db.ObjectId
+  authorId  String   @db.ObjectId
+  content   String
+  attachments String[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  task      Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  @@map("comments")
+}
+
+// ============================================================
+// MODULE 4 — REAL-TIME COMMUNICATION
+// ============================================================
+
+model ChatRoom {
+  id        String       @id @default(auto()) @map("_id") @db.ObjectId
+  name      String
+  type      ChatRoomType @default(PROJECT)
+  projectId String?      @unique @db.ObjectId
+  createdAt DateTime     @default(now())
+  updatedAt DateTime     @updatedAt
+
+  // Relations
+  project   Project?     @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  messages  Message[]
+
+  @@map("chat_rooms")
+}
+
+enum ChatRoomType {
+  PROJECT
+  DIRECT
+  GROUP
+}
+
+model Message {
+  id         String   @id @default(auto()) @map("_id") @db.ObjectId
+  roomId     String   @db.ObjectId
+  senderId   String   @db.ObjectId
+  content    String
+  fileUrl    String?
+  fileType   String?
+  isEdited   Boolean  @default(false)
+  isDeleted  Boolean  @default(false)
+  readBy     String[]
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  // Relations
+  room       ChatRoom @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  sender     User     @relation(fields: [senderId], references: [id], onDelete: Cascade)
+
+  @@map("messages")
+}
+
+model Notification {
+  id        String           @id @default(auto()) @map("_id") @db.ObjectId
+  userId    String           @db.ObjectId
+  title     String
+  message   String
+  type      NotificationType
+  isRead    Boolean          @default(false)
+  link      String?
+  createdAt DateTime         @default(now())
+
+  // Relations
+  user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("notifications")
+}
+
+enum NotificationType {
+  TASK_ASSIGNED
+  TASK_UPDATED
+  LEAVE_REQUESTED
+  LEAVE_APPROVED
+  LEAVE_REJECTED
+  EXPENSE_APPROVED
+  EXPENSE_REJECTED
+  PROJECT_ADDED
+  MENTION
+  GENERAL
+}
+
+// ============================================================
+// MODULE 5 — ANALYTICS AND INTEGRATION
+// ============================================================
+
+model Payment {
+  id            String        @id @default(auto()) @map("_id") @db.ObjectId
+  userId        String        @db.ObjectId
+  razorpayOrderId   String    @unique
+  razorpayPaymentId String?
+  razorpaySignature String?
+  amount        Float
+  currency      String        @default("INR")
+  status        PaymentStatus @default(PENDING)
+  plan          PlanType
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  // Relations
+  user          User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  subscription  Subscription?
+
+  @@map("payments")
+}
+
+enum PaymentStatus {
+  PENDING
+  SUCCESS
+  FAILED
+  REFUNDED
+}
+
+enum PlanType {
+  BASIC
+  PRO
+  ENTERPRISE
+}
+
+model Subscription {
+  id        String             @id @default(auto()) @map("_id") @db.ObjectId
+  paymentId String             @unique @db.ObjectId
+  userId    String             @db.ObjectId
+  plan      PlanType
+  status    SubscriptionStatus @default(ACTIVE)
+  startDate DateTime           @default(now())
+  endDate   DateTime
+  createdAt DateTime           @default(now())
+  updatedAt DateTime           @updatedAt
+
+  // Relations
+  payment   Payment            @relation(fields: [paymentId], references: [id], onDelete: Cascade)
+
+  @@map("subscriptions")
+}
+
+enum SubscriptionStatus {
+  ACTIVE
+  EXPIRED
+  CANCELLED
+}
+
+model ActivityLog {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  userId    String   @db.ObjectId
+  projectId String?  @db.ObjectId
+  action    String
+  entity    String
+  entityId  String?
+  oldValue  String?
+  newValue  String?
+  ipAddress String?
+  userAgent String?
+  createdAt DateTime @default(now())
+
+  // Relations
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  project   Project? @relation(fields: [projectId], references: [id], onDelete: SetNull)
+
+  @@map("activity_logs")
+}
