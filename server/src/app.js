@@ -4,15 +4,18 @@ const dotenv = require('dotenv')
 const rateLimit = require('express-rate-limit')
 const corsOptions = require('./config/cors')
 const { errorMiddleware } = require('./middleware/error.middleware')
+const passport = require('./config/passport') // ← ADD THIS
+
 
 dotenv.config()
 
 const app = express()
-
 // Middleware
 app.use(cors(corsOptions))
 app.use(express.json({ limit: '10mb' }))
 app.use(express.urlencoded({ extended: true, limit: '10mb' }))
+app.use(passport.initialize()) // ← ADD THIS
+
 
 // Global rate limiter
 const globalLimiter = rateLimit({
@@ -40,6 +43,7 @@ app.use('/api/payments', require('./routes/payment.routes'))
 app.use('/api/analytics', require('./routes/analytics.routes'))
 app.use('/api/upload', require('./routes/upload.routes'))
 app.use('/api/notifications', require('./routes/notification.routes'))
+
 // Health check
 app.get('/api/health', (req, res) => {
   res.json({

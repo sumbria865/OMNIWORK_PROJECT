@@ -15,6 +15,9 @@ const planDuration = {
 }
 
 const createOrder = async (userId, plan) => {
+  console.log('Razorpay instance:', razorpay)
+  console.log('Creating order for:', userId, plan)
+
   if (!planPricing[plan]) {
     const error = new Error('Invalid plan selected')
     error.statusCode = 400
@@ -23,30 +26,37 @@ const createOrder = async (userId, plan) => {
 
   const amount = planPricing[plan] * 100
 
-  const order = await razorpay.orders.create({
-    amount,
-    currency: 'INR',
-    receipt: `receipt_${userId}_${Date.now()}`,
-    notes: { userId, plan }
-  })
-
-  const payment = await prisma.payment.create({
-    data: {
-      userId,
-      razorpayOrderId: order.id,
-      amount: planPricing[plan],
+  try {                                           // ← add try/catch here
+    const order = await razorpay.orders.create({
+      amount,
       currency: 'INR',
-      status: 'PENDING',
-      plan
-    }
-  })
+      receipt: `rcpt_${Date.now()}`,
 
-  return {
-    orderId: order.id,
-    amount: order.amount,
-    currency: order.currency,
-    plan,
-    paymentId: payment.id
+      notes: { userId, plan }
+    })
+    console.log('Order created:', order)          // ← log success
+
+    const payment = await prisma.payment.create({
+      data: {
+        userId,
+        razorpayOrderId: order.id,
+        amount: planPricing[plan],
+        currency: 'INR',
+        status: 'PENDING',
+        plan
+      }
+    })
+
+    return {
+      orderId: order.id,
+      amount: order.amount,
+      currency: order.currency,
+      plan,
+      paymentId: payment.id
+    }
+  } catch (err) {
+    console.error('Razorpay order error:', err)  // ← this shows the real error
+    throw err
   }
 }
 

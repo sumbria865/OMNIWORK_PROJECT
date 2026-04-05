@@ -10,10 +10,14 @@ const storage = new CloudinaryStorage({
     if (file.fieldname === 'receipt') folder = 'omniwork/receipts'
     if (file.fieldname === 'attachment') folder = 'omniwork/attachments'
     if (file.fieldname === 'document') folder = 'omniwork/documents'
+
+    const isImage = file.mimetype.startsWith('image/')
+
     return {
       folder,
+      resource_type: isImage ? 'image' : 'raw', // ← ADD THIS
       allowed_formats: ['jpg', 'jpeg', 'png', 'pdf', 'doc', 'docx'],
-      transformation: file.mimetype.startsWith('image/')
+      transformation: isImage
         ? [{ width: 1000, crop: 'limit' }]
         : undefined
     }
@@ -22,7 +26,7 @@ const storage = new CloudinaryStorage({
 
 const upload = multer({
   storage,
-  limits: { fileSize: 5 * 1024 * 1024 },
+  limits: { fileSize: 10 * 1024 * 1024 }, // ← change 5MB to 10MB
   fileFilter: (req, file, cb) => {
     const allowedMimes = [
       'image/jpeg',
@@ -40,4 +44,4 @@ const upload = multer({
   }
 })
 
-module.exports = { upload } 
+module.exports = { upload }

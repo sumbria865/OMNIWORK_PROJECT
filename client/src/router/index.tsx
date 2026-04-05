@@ -16,6 +16,8 @@ import ChatRoom from '../pages/chat/ChatRoom'
 import Analytics from '../pages/analytics/Analytics'
 import Plans from '../pages/payments/Plans'
 import Settings from '../pages/settings/Settings'
+import GoogleSuccess from '../pages/auth/GoogleSuccess'
+
 
 const AppRouter = () => {
   const { isAuthenticated, isLoading } = useAuth()
@@ -34,14 +36,16 @@ const AppRouter = () => {
   return (
     <Routes>
       {/* Public routes */}
-      <Route
-        path="/login"
-        element={isAuthenticated ? <Navigate to="/dashboard" replace /> : <Login />}
-      />
-      <Route
-        path="/register"
-        element={isAuthenticated ? <Navigate to="/dashboard" replace /> : <Register />}
-      />
+      {/* Public routes */}
+<Route
+  path="/login"
+  element={isAuthenticated ? <Navigate to="/dashboard" replace /> : <Login />}
+/>
+<Route
+  path="/register"
+  element={isAuthenticated ? <Navigate to="/dashboard" replace /> : <Register />}
+/>
+<Route path="/auth/google/success" element={<GoogleSuccess />} />  {/* ← ADD THIS */}
 
       {/* Protected routes wrapped with PageWrapper */}
       <Route element={<ProtectedRoute />}>
@@ -90,6 +94,7 @@ const AppRouter = () => {
       <Route path="/settings" element={
   <PageWrapper><Settings /></PageWrapper>
 } />
+
     </Routes>
   )
 }
