@@ -24,6 +24,7 @@ interface AuthContextType {
   }) => Promise<void>
   logout: () => void
   updateUser: (user: User) => void
+  loginWithGoogle: (token: string, user: User) => void
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
@@ -82,6 +83,15 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     localStorage.setItem('user', JSON.stringify(updatedUser))
   }, [])
 
+  // ← ADD THIS FUNCTION
+  const loginWithGoogle = useCallback((token: string, user: User) => {
+    setUser(user)
+    setToken(token)
+    localStorage.setItem('token', token)
+    localStorage.setItem('user', JSON.stringify(user))
+    toast.success(`Welcome, ${user.name}!`)
+  }, [])
+
   return (
     <AuthContext.Provider
       value={{
@@ -92,7 +102,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         login,
         register,
         logout,
-        updateUser
+        updateUser,
+        loginWithGoogle  // ← ADD THIS
       }}
     >
       {children}
