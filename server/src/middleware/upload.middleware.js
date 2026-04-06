@@ -13,14 +13,16 @@ const storage = new CloudinaryStorage({
 
     const isImage = file.mimetype.startsWith('image/')
 
-    return {
-      folder,
-      resource_type: isImage ? 'image' : 'raw', // ← ADD THIS
-      allowed_formats: ['jpg', 'jpeg', 'png', 'pdf', 'doc', 'docx'],
-      transformation: isImage
-        ? [{ width: 1000, crop: 'limit' }]
-        : undefined
-    }
+  return {
+  folder,
+  resource_type: 'auto',
+  type: 'upload',
+  upload_preset: 'omniwork_uploads',  // ← ADD THIS
+  allowed_formats: ['jpg', 'jpeg', 'png', 'pdf', 'doc', 'docx'],
+  transformation: isImage
+    ? [{ width: 1000, crop: 'limit' }]
+    : undefined
+}
   }
 })
 

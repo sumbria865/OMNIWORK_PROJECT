@@ -13,7 +13,11 @@ import {
   Settings,
   Loader2,
   X,
-  Flag
+  Flag,
+  Brain,
+  TrendingUp,
+  AlertTriangle,
+  CheckCircle
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import KanbanBoard from '../../components/kanban/KanbanBoard'
@@ -38,6 +42,16 @@ interface Project {
   _count: { tasks: number; members: number }
 }
 
+interface MLDelay {
+  status_label: string
+  status_color: string
+  confidence_pct: number
+  completion_pct: number
+  recommendation: string
+  risk_factors: string[]
+  all_probabilities: Record<string, number>
+}
+
 const statusColors: Record<string, string> = {
   ACTIVE:    'badge-green',
   ON_HOLD:   'badge-yellow',
@@ -58,16 +72,17 @@ type TabType = 'kanban' | 'members' | 'sprints' | 'settings'
 export default function ProjectDetail() {
   const { id } = useParams<{ id: string }>()
   const { user } = useAuth()
-  const [project, setProject] = useState<Project | null>(null)
+  const [project, setProject]     = useState<Project | null>(null)
+  const [mlDelay, setMlDelay]     = useState<MLDelay | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [activeTab, setActiveTab] = useState<TabType>('kanban')
   const [showAddMember, setShowAddMember] = useState(false)
-  const [memberEmail, setMemberEmail] = useState('')
-  const [addingMember, setAddingMember] = useState(false)
+  const [memberEmail, setMemberEmail]     = useState('')
+  const [addingMember, setAddingMember]   = useState(false)
   const [users, setUsers] = useState<any[]>([])
 
   useEffect(() => {
-    if (id) fetchProject()
+    if (id) { fetchProject(); fetchMLStats() }
   }, [id])
 
   const fetchProject = async () => {
@@ -79,6 +94,17 @@ export default function ProjectDetail() {
       toast.error('Failed to fetch project')
     } finally {
       setIsLoading(false)
+    }
+  }
+
+  const fetchMLStats = async () => {
+    try {
+      const res = await api.get(`/projects/${id}/stats`)
+      if (res.data.data.stats?.mlDelay) {
+        setMlDelay(res.data.data.stats.mlDelay)
+      }
+    } catch {
+      // non-fatal
     }
   }
 
@@ -143,6 +169,13 @@ export default function ProjectDetail() {
 
   const isAdminOrManager = user?.role === 'ADMIN' || user?.role === 'MANAGER'
 
+  // Pick icon for ML status
+  const MLIcon = mlDelay?.status_label === 'On Track'
+    ? CheckCircle
+    : mlDelay?.status_label === 'At Risk'
+    ? AlertTriangle
+    : TrendingUp
+
   return (
     <div className="space-y-6 animate-fade-in">
       {/* Header */}
@@ -159,9 +192,7 @@ export default function ProjectDetail() {
           <div className="space-y-2 flex-1 min-w-0">
             <div className="flex items-center gap-3 flex-wrap">
               <h2 className="page-title truncate">{project.name}</h2>
-              <span className={`badge ${statusColors[project.status]}`}>
-                {project.status}
-              </span>
+              <span className={`badge ${statusColors[project.status]}`}>{project.status}</span>
               <span className={`badge ${priorityColors[project.priority]}`}>
                 <Flag size={10} className="mr-1" />
                 {project.priority}
@@ -173,23 +204,19 @@ export default function ProjectDetail() {
             <div className="flex items-center gap-4 text-gray-600 text-xs flex-wrap">
               {project.startDate && (
                 <span className="flex items-center gap-1">
-                  <Calendar size={12} />
-                  {formatDate(project.startDate)}
+                  <Calendar size={12} />{formatDate(project.startDate)}
                 </span>
               )}
               {project.endDate && (
                 <span className="flex items-center gap-1">
-                  <Calendar size={12} />
-                  {formatDate(project.endDate)}
+                  <Calendar size={12} />{formatDate(project.endDate)}
                 </span>
               )}
               <span className="flex items-center gap-1">
-                <CheckSquare size={12} />
-                {project._count.tasks} tasks
+                <CheckSquare size={12} />{project._count.tasks} tasks
               </span>
               <span className="flex items-center gap-1">
-                <Users size={12} />
-                {project._count.members} members
+                <Users size={12} />{project._count.members} members
               </span>
             </div>
           </div>
@@ -236,10 +263,74 @@ export default function ProjectDetail() {
               </div>
             )}
           </div>
-          <span className="text-gray-600 text-xs">
-            Created by {project.createdBy.name}
-          </span>
+          <span className="text-gray-600 text-xs">Created by {project.createdBy.name}</span>
         </div>
+
+        {/* ── ML Delay Prediction Panel ──────────────────────────────────── */}
+        {mlDelay && (
+          <div
+            className="rounded-xl border p-4 space-y-3"
+            style={{
+              backgroundColor: `${mlDelay.status_color}10`,
+              borderColor: `${mlDelay.status_color}40`,
+            }}
+          >
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex items-center gap-2">
+                <Brain size={16} style={{ color: mlDelay.status_color }} />
+                <span className="text-sm font-semibold text-gray-200">AI Project Health</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <MLIcon size={14} style={{ color: mlDelay.status_color }} />
+                <span className="text-sm font-bold" style={{ color: mlDelay.status_color }}>
+                  {mlDelay.status_label}
+                </span>
+                <span className="text-xs text-gray-500">
+                  {mlDelay.confidence_pct.toFixed(0)}% confidence
+                </span>
+              </div>
+            </div>
+
+            {/* Probability bars */}
+            <div className="grid grid-cols-3 gap-2">
+              {Object.entries(mlDelay.all_probabilities).map(([label, pct]) => (
+                <div key={label} className="space-y-1">
+                  <div className="flex justify-between text-xs">
+                    <span className="text-gray-500">{label}</span>
+                    <span className="text-gray-400">{pct.toFixed(1)}%</span>
+                  </div>
+                  <div className="h-1.5 bg-surface-muted rounded-full overflow-hidden">
+                    <div
+                      className="h-full rounded-full"
+                      style={{
+                        width: `${pct}%`,
+                        backgroundColor: mlDelay.status_color,
+                        opacity: label === mlDelay.status_label ? 1 : 0.4,
+                      }}
+                    />
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <p className="text-xs text-gray-400">{mlDelay.recommendation}</p>
+
+            {mlDelay.risk_factors.length > 0 && (
+              <div className="flex flex-wrap gap-1.5">
+                {mlDelay.risk_factors.map((rf, i) => (
+                  <span
+                    key={i}
+                    className="text-xs px-2 py-0.5 rounded-full border"
+                    style={{ borderColor: `${mlDelay.status_color}50`, color: mlDelay.status_color }}
+                  >
+                    ⚠ {rf}
+                  </span>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+        {/* ────────────────────────────────────────────────────────────────── */}
       </div>
 
       {/* Tabs */}
@@ -264,31 +355,21 @@ export default function ProjectDetail() {
       </div>
 
       {/* Tab content */}
-      {activeTab === 'kanban' && (
-        <KanbanBoard projectId={project.id} />
-      )}
+      {activeTab === 'kanban' && <KanbanBoard projectId={project.id} />}
 
       {activeTab === 'members' && (
         <div className="space-y-4">
           <div className="flex items-center justify-between">
             <h3 className="section-title">Project Members</h3>
             {isAdminOrManager && (
-              <button
-                onClick={() => { setShowAddMember(true); fetchUsers() }}
-                className="btn-primary"
-              >
-                <Plus size={16} />
-                Add Member
+              <button onClick={() => { setShowAddMember(true); fetchUsers() }} className="btn-primary">
+                <Plus size={16} />Add Member
               </button>
             )}
           </div>
-
           <div className="space-y-2">
             {project.members.map((member) => (
-              <div
-                key={member.id}
-                className="card flex items-center justify-between"
-              >
+              <div key={member.id} className="card flex items-center justify-between">
                 <div className="flex items-center gap-3">
                   <img
                     src={getAvatarUrl(member.user.avatar, member.user.name)}
@@ -301,9 +382,7 @@ export default function ProjectDetail() {
                   </div>
                 </div>
                 <div className="flex items-center gap-3">
-                  <span className="badge badge-purple capitalize">
-                    {member.role.toLowerCase()}
-                  </span>
+                  <span className="badge badge-purple capitalize">{member.role.toLowerCase()}</span>
                   {isAdminOrManager && member.role !== 'OWNER' && (
                     <button
                       onClick={() => handleRemoveMember(member.user.id)}
@@ -317,16 +396,12 @@ export default function ProjectDetail() {
             ))}
           </div>
 
-          {/* Add member modal */}
           {showAddMember && (
             <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
               <div className="bg-surface border border-surface-border rounded-2xl w-full max-w-md shadow-card animate-slide-up">
                 <div className="flex items-center justify-between p-5 border-b border-surface-border">
                   <h3 className="text-gray-100 font-semibold">Add Member</h3>
-                  <button
-                    onClick={() => setShowAddMember(false)}
-                    className="p-1.5 text-gray-600 hover:text-gray-400 hover:bg-surface-hover rounded-lg"
-                  >
+                  <button onClick={() => setShowAddMember(false)} className="p-1.5 text-gray-600 hover:text-gray-400 hover:bg-surface-hover rounded-lg">
                     <X size={16} />
                   </button>
                 </div>
@@ -352,11 +427,7 @@ export default function ProjectDetail() {
                           disabled={addingMember}
                           className="w-full flex items-center gap-3 p-3 hover:bg-surface-hover rounded-xl transition-colors text-left"
                         >
-                          <img
-                            src={getAvatarUrl(u.avatar, u.name)}
-                            alt={u.name}
-                            className="w-8 h-8 rounded-full object-cover"
-                          />
+                          <img src={getAvatarUrl(u.avatar, u.name)} alt={u.name} className="w-8 h-8 rounded-full object-cover" />
                           <div>
                             <p className="text-gray-200 text-sm font-medium">{u.name}</p>
                             <p className="text-gray-600 text-xs">{u.email}</p>

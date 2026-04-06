@@ -8,11 +8,20 @@ import {
   MessageSquare,
   Paperclip,
   Flag,
-  GripVertical
+  GripVertical,
+  Brain
 } from 'lucide-react'
 
 interface TaskCardProps {
-  task: Task
+  task: Task & {
+    mlInsight?: {
+      priority_label: string
+      confidence_pct: number
+      priority_color: string
+      recommendation: string
+      all_probabilities: Record<string, number>
+    } | null
+  }
   onClick: (task: Task) => void
 }
 
@@ -40,6 +49,7 @@ export default function TaskCard({ task, onClick }: TaskCardProps) {
   }
 
   const overdue = task.dueDate && isOverdue(task.dueDate) && task.status !== 'DONE'
+  const ml = task.mlInsight
 
   return (
     <div
@@ -80,6 +90,40 @@ export default function TaskCard({ task, onClick }: TaskCardProps) {
         </p>
       )}
 
+      {/* ── ML Insight Badge ───────────────────────────────────────────── */}
+      {ml && (
+        <div
+          className="flex items-start gap-2 rounded-lg px-2.5 py-2 border"
+          style={{
+            backgroundColor: `${ml.priority_color}15`,
+            borderColor: `${ml.priority_color}40`,
+          }}
+          onClick={e => e.stopPropagation()}
+        >
+          <Brain size={12} className="mt-0.5 flex-shrink-0" style={{ color: ml.priority_color }} />
+          <div className="flex-1 min-w-0 space-y-1">
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-xs font-semibold" style={{ color: ml.priority_color }}>
+                AI: {ml.priority_label}
+              </span>
+              <span className="text-xs text-gray-500">{ml.confidence_pct.toFixed(0)}%</span>
+            </div>
+            {/* Confidence bar */}
+            <div className="h-1 bg-surface-muted rounded-full overflow-hidden">
+              <div
+                className="h-full rounded-full transition-all"
+                style={{
+                  width: `${ml.confidence_pct}%`,
+                  backgroundColor: ml.priority_color,
+                }}
+              />
+            </div>
+            <p className="text-xs text-gray-500 line-clamp-1">{ml.recommendation}</p>
+          </div>
+        </div>
+      )}
+      {/* ────────────────────────────────────────────────────────────────── */}
+
       {/* Tags */}
       {task.tags.length > 0 && (
         <div className="flex flex-wrap gap-1">
@@ -99,25 +143,18 @@ export default function TaskCard({ task, onClick }: TaskCardProps) {
       {/* Footer */}
       <div className="flex items-center justify-between pt-1">
         <div className="flex items-center gap-3 text-xs">
-          {/* Due date */}
           {task.dueDate && (
-            <span className={`flex items-center gap-1 ${
-              overdue ? 'text-red-400' : 'text-gray-600'
-            }`}>
+            <span className={`flex items-center gap-1 ${overdue ? 'text-red-400' : 'text-gray-600'}`}>
               <Calendar size={11} />
               {formatDate(task.dueDate)}
             </span>
           )}
-
-          {/* Comments count */}
           {(task._count?.comments ?? 0) > 0 && (
             <span className="flex items-center gap-1 text-gray-600">
               <MessageSquare size={11} />
               {task._count?.comments}
             </span>
           )}
-
-          {/* Attachments count */}
           {task.attachments.length > 0 && (
             <span className="flex items-center gap-1 text-gray-600">
               <Paperclip size={11} />
@@ -125,8 +162,6 @@ export default function TaskCard({ task, onClick }: TaskCardProps) {
             </span>
           )}
         </div>
-
-        {/* Assignee avatar */}
         {task.assignee && (
           <img
             src={getAvatarUrl(task.assignee.avatar, task.assignee.name)}

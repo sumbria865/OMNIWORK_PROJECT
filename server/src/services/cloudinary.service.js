@@ -12,11 +12,8 @@ const deleteFile = async (publicId) => {
 
 const getPublicIdFromUrl = (url) => {
   if (!url) return null
-  const parts = url.split('/')
-  const filename = parts[parts.length - 1]
-  const publicId = filename.split('.')[0]
-  const folder = parts[parts.length - 2]
-  return `${folder}/${publicId}`
+  const matches = url.match(/\/upload\/(?:v\d+\/)?(.+)\.[^.]+$/)
+  return matches ? matches[1] : null
 }
 
 const uploadBase64 = async (base64String, folder) => {

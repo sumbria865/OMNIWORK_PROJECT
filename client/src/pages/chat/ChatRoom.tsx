@@ -410,10 +410,9 @@ export default function ChatRoom() {
                         {/* Text content */}
                         {(!message.fileUrl || message.isDeleted) && message.content}
 
-                        {/* Text below image */}
-                        {message.fileUrl && !message.isDeleted && newMessage && (
-                          <p className="mt-1">{message.content}</p>
-                        )}
+                       {message.fileUrl && !message.isDeleted && message.content && message.content !== selectedFile?.name && (
+  <p className="mt-1">{message.content}</p>
+)}
 
                         {!message.isDeleted && isOwn && (
                           <button

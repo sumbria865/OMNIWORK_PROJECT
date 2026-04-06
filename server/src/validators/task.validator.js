@@ -27,9 +27,14 @@ const createTaskValidator = [
     .optional()
     .isISO8601().withMessage('Invalid due date format'),
 
-  body('estimatedHrs')
+ body('estimatedHrs')
     .optional()
     .isFloat({ min: 0 }).withMessage('Estimated hours must be a positive number'),
+
+  body('type')
+    .optional()
+    .isIn(['bug', 'feature', 'research', 'devops', 'qa'])
+    .withMessage('Invalid task type'),
 
   body('tags')
     .optional()

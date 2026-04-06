@@ -1,39 +1,27 @@
 const prisma = require('../config/database')
 const { getPagination, getPaginationMeta } = require('../utils/pagination.utils')
+const mlService = require('./mlClient')  // ← ADD THIS
 
 const createProject = async (data, userId) => {
   const project = await prisma.project.create({
     data: {
-      name: data.name,
+      name:        data.name,
       description: data.description,
-      status: data.status || 'ACTIVE',
-      priority: data.priority || 'MEDIUM',
-      startDate: data.startDate ? new Date(data.startDate) : null,
-      endDate: data.endDate ? new Date(data.endDate) : null,
-      budget: data.budget ? parseFloat(data.budget) : null,
-      tags: data.tags || [],
+      status:      data.status || 'ACTIVE',
+      priority:    data.priority || 'MEDIUM',
+      startDate:   data.startDate ? new Date(data.startDate) : null,
+      endDate:     data.endDate   ? new Date(data.endDate)   : null,
+      budget:      data.budget    ? parseFloat(data.budget)  : null,
+      tags:        data.tags || [],
       createdById: userId,
-      members: {
-        create: {
-          userId,
-          role: 'OWNER'
-        }
-      }
+      members: { create: { userId, role: 'OWNER' } }
     },
     include: {
-      createdBy: {
-        select: { id: true, name: true, email: true, avatar: true }
-      },
+      createdBy: { select: { id: true, name: true, email: true, avatar: true } },
       members: {
-        include: {
-          user: {
-            select: { id: true, name: true, email: true, avatar: true }
-          }
-        }
+        include: { user: { select: { id: true, name: true, email: true, avatar: true } } }
       },
-      _count: {
-        select: { tasks: true, members: true }
-      }
+      _count: { select: { tasks: true, members: true } }
     }
   })
   return project
@@ -47,15 +35,13 @@ const getAllProjects = async (query, userId, userRole) => {
     AND: [
       search ? {
         OR: [
-          { name: { contains: search, mode: 'insensitive' } },
+          { name:        { contains: search, mode: 'insensitive' } },
           { description: { contains: search, mode: 'insensitive' } }
         ]
       } : {},
-      query.status ? { status: query.status } : {},
+      query.status   ? { status: query.status }     : {},
       query.priority ? { priority: query.priority } : {},
-      userRole === 'EMPLOYEE' ? {
-        members: { some: { userId } }
-      } : {}
+      userRole === 'EMPLOYEE' ? { members: { some: { userId } } } : {}
     ]
   }
 
@@ -65,19 +51,11 @@ const getAllProjects = async (query, userId, userRole) => {
       skip,
       take: limit,
       include: {
-        createdBy: {
-          select: { id: true, name: true, avatar: true }
-        },
+        createdBy: { select: { id: true, name: true, avatar: true } },
         members: {
-          include: {
-            user: {
-              select: { id: true, name: true, avatar: true }
-            }
-          }
+          include: { user: { select: { id: true, name: true, avatar: true } } }
         },
-        _count: {
-          select: { tasks: true, members: true }
-        }
+        _count: { select: { tasks: true, members: true } }
       },
       orderBy: { createdAt: 'desc' }
     }),
@@ -91,22 +69,14 @@ const getProjectById = async (id, userId, userRole) => {
   const project = await prisma.project.findUnique({
     where: { id },
     include: {
-      createdBy: {
-        select: { id: true, name: true, email: true, avatar: true }
-      },
+      createdBy: { select: { id: true, name: true, email: true, avatar: true } },
       members: {
         include: {
-          user: {
-            select: { id: true, name: true, email: true, avatar: true, role: true }
-          }
+          user: { select: { id: true, name: true, email: true, avatar: true, role: true } }
         }
       },
-      sprints: {
-        orderBy: { createdAt: 'desc' }
-      },
-      _count: {
-        select: { tasks: true, members: true }
-      }
+      sprints: { orderBy: { createdAt: 'desc' } },
+      _count:  { select: { tasks: true, members: true } }
     }
   })
 
@@ -136,34 +106,26 @@ const updateProject = async (id, data) => {
     throw error
   }
 
-  const updated = await prisma.project.update({
+  return prisma.project.update({
     where: { id },
     data: {
-      name: data.name,
+      name:        data.name,
       description: data.description,
-      status: data.status,
-      priority: data.priority,
-      startDate: data.startDate ? new Date(data.startDate) : undefined,
-      endDate: data.endDate ? new Date(data.endDate) : undefined,
-      budget: data.budget ? parseFloat(data.budget) : undefined,
-      progress: data.progress ? parseFloat(data.progress) : undefined,
-      tags: data.tags
+      status:      data.status,
+      priority:    data.priority,
+      startDate:   data.startDate ? new Date(data.startDate) : undefined,
+      endDate:     data.endDate   ? new Date(data.endDate)   : undefined,
+      budget:      data.budget    ? parseFloat(data.budget)  : undefined,
+      progress:    data.progress  ? parseFloat(data.progress): undefined,
+      tags:        data.tags
     },
     include: {
-      createdBy: {
-        select: { id: true, name: true, avatar: true }
-      },
+      createdBy: { select: { id: true, name: true, avatar: true } },
       members: {
-        include: {
-          user: {
-            select: { id: true, name: true, avatar: true }
-          }
-        }
+        include: { user: { select: { id: true, name: true, avatar: true } } }
       }
     }
   })
-
-  return updated
 }
 
 const deleteProject = async (id) => {
@@ -187,15 +149,10 @@ const addMember = async (projectId, userId, role) => {
     throw error
   }
 
-  const member = await prisma.projectMember.create({
+  return prisma.projectMember.create({
     data: { projectId, userId, role: role || 'MEMBER' },
-    include: {
-      user: {
-        select: { id: true, name: true, email: true, avatar: true }
-      }
-    }
+    include: { user: { select: { id: true, name: true, email: true, avatar: true } } }
   })
-  return member
 }
 
 const removeMember = async (projectId, userId) => {
@@ -219,22 +176,51 @@ const removeMember = async (projectId, userId) => {
 }
 
 const getProjectStats = async (id) => {
-  const [total, todo, inProgress, done, blocked] = await Promise.all([
+  // ── DB counts ────────────────────────────────────────────────────────────
+  const [total, todo, inProgress, inReview, done, blocked, project] = await Promise.all([
     prisma.task.count({ where: { projectId: id } }),
     prisma.task.count({ where: { projectId: id, status: 'TODO' } }),
     prisma.task.count({ where: { projectId: id, status: 'IN_PROGRESS' } }),
+    prisma.task.count({ where: { projectId: id, status: 'IN_REVIEW' } }),
     prisma.task.count({ where: { projectId: id, status: 'DONE' } }),
-    prisma.task.count({ where: { projectId: id, status: 'BLOCKED' } })
+    prisma.task.count({ where: { projectId: id, status: 'BLOCKED' } }),
+    prisma.project.findUnique({ where: { id } })
   ])
 
   const progress = total > 0 ? Math.round((done / total) * 100) : 0
+
+  // ── ML: predict delay risk ───────────────────────────────────────────────
+  let mlDelay = null
+  try {
+    if (project) {
+      const deadlineDaysRemaining = project.endDate
+        ? Math.ceil((new Date(project.endDate) - new Date()) / (1000 * 60 * 60 * 24))
+        : 30  // fallback if no end date set
+
+      const memberCount = await prisma.projectMember.count({ where: { projectId: id } })
+
+      mlDelay = await mlService.predictProjectDelay({
+        total_tasks:              total,
+        completed_tasks:          done,
+        team_size:                memberCount,
+        deadline_days_remaining:  deadlineDaysRemaining,
+        overdue_tasks:            blocked  // blocked tasks treated as overdue
+      })
+    }
+  } catch (mlErr) {
+    console.warn('ML delay prediction failed (non-fatal):', mlErr.message)
+  }
+  // ────────────────────────────────────────────────────────────────────────
 
   await prisma.project.update({
     where: { id },
     data: { progress }
   })
 
-  return { total, todo, inProgress, done, blocked, progress }
+  return {
+    total, todo, inProgress, inReview, done, blocked, progress,
+    mlDelay  // ← e.g. { status_label: "On Track", confidence_pct: 54.8, recommendation: "..." }
+  }
 }
 
 module.exports = {

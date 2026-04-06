@@ -1,61 +1,35 @@
 const prisma = require('../config/database')
 const { successResponse, errorResponse } = require('../utils/apiResponse.utils')
 const { getPagination, getPaginationMeta } = require('../utils/pagination.utils')
+const mlService = require('../services/mlClient')  // ← ADD THIS
 
 const createEmployee = async (req, res) => {
   try {
     const {
-      userId,
-      employeeCode,
-      designation,
-      department,
-      phone,
-      address,
-      dateOfJoining,
-      dateOfBirth,
-      salary,
-      bankAccount,
-      emergencyContact
+      userId, employeeCode, designation, department,
+      phone, address, dateOfJoining, dateOfBirth,
+      salary, bankAccount, emergencyContact
     } = req.body
 
-    const existing = await prisma.employee.findUnique({
-      where: { userId }
-    })
-    if (existing) {
-      return errorResponse(res, 'Employee profile already exists for this user', 400)
-    }
+    const existing = await prisma.employee.findUnique({ where: { userId } })
+    if (existing) return errorResponse(res, 'Employee profile already exists for this user', 400)
 
-    const codeExists = await prisma.employee.findUnique({
-      where: { employeeCode }
-    })
-    if (codeExists) {
-      return errorResponse(res, 'Employee code already in use', 400)
-    }
+    const codeExists = await prisma.employee.findUnique({ where: { employeeCode } })
+    if (codeExists) return errorResponse(res, 'Employee code already in use', 400)
 
     const employee = await prisma.employee.create({
       data: {
-        userId,
-        employeeCode,
-        designation,
-        department,
-        phone: phone || null,
-        address: address || null,
-        dateOfJoining: new Date(dateOfJoining),
-        dateOfBirth: dateOfBirth ? new Date(dateOfBirth) : null,
-        salary: salary ? parseFloat(salary) : null,
-        bankAccount: bankAccount || null,
+        userId, employeeCode, designation, department,
+        phone:            phone            || null,
+        address:          address          || null,
+        dateOfJoining:    new Date(dateOfJoining),
+        dateOfBirth:      dateOfBirth      ? new Date(dateOfBirth) : null,
+        salary:           salary           ? parseFloat(salary)    : null,
+        bankAccount:      bankAccount      || null,
         emergencyContact: emergencyContact || null
       },
       include: {
-        user: {
-          select: {
-            id: true,
-            name: true,
-            email: true,
-            avatar: true,
-            role: true
-          }
-        }
+        user: { select: { id: true, name: true, email: true, avatar: true, role: true } }
       }
     })
 
@@ -75,13 +49,9 @@ const getAllEmployees = async (req, res) => {
         search ? {
           OR: [
             { designation: { contains: search, mode: 'insensitive' } },
-            { department: { contains: search, mode: 'insensitive' } },
-            { employeeCode: { contains: search, mode: 'insensitive' } },
-            {
-              user: {
-                name: { contains: search, mode: 'insensitive' }
-              }
-            }
+            { department:  { contains: search, mode: 'insensitive' } },
+            { employeeCode:{ contains: search, mode: 'insensitive' } },
+            { user: { name: { contains: search, mode: 'insensitive' } } }
           ]
         } : {},
         req.query.department ? { department: req.query.department } : {}
@@ -90,20 +60,10 @@ const getAllEmployees = async (req, res) => {
 
     const [employees, total] = await Promise.all([
       prisma.employee.findMany({
-        where,
-        skip,
-        take: limit,
+        where, skip, take: limit,
         include: {
           user: {
-            select: {
-              id: true,
-              name: true,
-              email: true,
-              avatar: true,
-              role: true,
-              isActive: true,
-              lastLogin: true
-            }
+            select: { id: true, name: true, email: true, avatar: true, role: true, isActive: true, lastLogin: true }
           }
         },
         orderBy: { createdAt: 'desc' }
@@ -126,37 +86,66 @@ const getEmployeeById = async (req, res) => {
       where: { id: req.params.id },
       include: {
         user: {
-          select: {
-            id: true,
-            name: true,
-            email: true,
-            avatar: true,
-            role: true,
-            isActive: true,
-            lastLogin: true,
-            createdAt: true
-          }
+          select: { id: true, name: true, email: true, avatar: true, role: true, isActive: true, lastLogin: true, createdAt: true }
         },
-        attendances: {
-          orderBy: { date: 'desc' },
-          take: 10
-        },
-        leaves: {
-          orderBy: { createdAt: 'desc' },
-          take: 5
-        },
-        performances: {
-          orderBy: { createdAt: 'desc' },
-          take: 3
-        }
+        attendances:  { orderBy: { date: 'desc' }, take: 30 },
+        leaves:       { orderBy: { createdAt: 'desc' }, take: 5 },
+        performances: { orderBy: { createdAt: 'desc' }, take: 3 }
       }
     })
 
-    if (!employee) {
-      return errorResponse(res, 'Employee not found', 404)
-    }
+    if (!employee) return errorResponse(res, 'Employee not found', 404)
 
-    return successResponse(res, 'Employee fetched successfully', { employee })
+    // ── ML: compute productivity score ─────────────────────────────────────
+    let mlProductivity = null
+    try {
+      const now          = new Date()
+      const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1)
+
+      // Attendance % from last 30 records
+      const totalAttendance    = employee.attendances.length
+      const presentDays        = employee.attendances.filter(a => a.status === 'PRESENT').length
+      const attendance_pct     = totalAttendance > 0 ? Math.round((presentDays / totalAttendance) * 100) : 100
+
+      // Tasks this month
+      const [tasksAssigned, tasksCompleted, tasksOnTime] = await Promise.all([
+        prisma.task.count({
+          where: { assigneeId: employee.userId, createdAt: { gte: startOfMonth } }
+        }),
+        prisma.task.count({
+          where: { assigneeId: employee.userId, status: 'DONE', completedAt: { gte: startOfMonth } }
+        }),
+        prisma.task.count({
+          where: {
+            assigneeId: employee.userId,
+            status:     'DONE',
+            completedAt:{ gte: startOfMonth },
+            // on-time = completed before or on due date
+            AND: [{ completedAt: { not: null } }, { dueDate: { not: null } }]
+          }
+        })
+      ])
+
+      const on_time_delivery_pct = tasksCompleted > 0
+        ? Math.round((tasksOnTime / tasksCompleted) * 100)
+        : 100
+
+      mlProductivity = await mlService.scoreProductivity({
+        employee_id:              employee.id,
+        attendance_pct,
+        tasks_completed_monthly:  tasksCompleted,
+        tasks_assigned_monthly:   tasksAssigned  || 1,  // avoid division by zero in ML model
+        on_time_delivery_pct
+      })
+    } catch (mlErr) {
+      console.warn('ML productivity score failed (non-fatal):', mlErr.message)
+    }
+    // ────────────────────────────────────────────────────────────────────────
+
+    return successResponse(res, 'Employee fetched successfully', {
+      employee,
+      mlProductivity  // ← { band_label, score, strengths, improvement_areas, recommendation }
+    })
   } catch (err) {
     return errorResponse(res, err.message, 500)
   }
@@ -167,21 +156,11 @@ const getMyEmployeeProfile = async (req, res) => {
     const employee = await prisma.employee.findUnique({
       where: { userId: req.user.id },
       include: {
-        user: {
-          select: {
-            id: true,
-            name: true,
-            email: true,
-            avatar: true,
-            role: true
-          }
-        }
+        user: { select: { id: true, name: true, email: true, avatar: true, role: true } }
       }
     })
 
-    if (!employee) {
-      return errorResponse(res, 'Employee profile not found', 404)
-    }
+    if (!employee) return errorResponse(res, 'Employee profile not found', 404)
 
     return successResponse(res, 'Employee profile fetched successfully', { employee })
   } catch (err) {
@@ -191,39 +170,22 @@ const getMyEmployeeProfile = async (req, res) => {
 
 const updateEmployee = async (req, res) => {
   try {
-    const employee = await prisma.employee.findUnique({
-      where: { id: req.params.id }
-    })
-    if (!employee) {
-      return errorResponse(res, 'Employee not found', 404)
-    }
+    const employee = await prisma.employee.findUnique({ where: { id: req.params.id } })
+    if (!employee) return errorResponse(res, 'Employee not found', 404)
 
     const updated = await prisma.employee.update({
       where: { id: req.params.id },
       data: {
-        designation: req.body.designation,
-        department: req.body.department,
-        phone: req.body.phone,
-        address: req.body.address,
-        dateOfBirth: req.body.dateOfBirth
-          ? new Date(req.body.dateOfBirth)
-          : undefined,
-        salary: req.body.salary
-          ? parseFloat(req.body.salary)
-          : undefined,
-        bankAccount: req.body.bankAccount,
+        designation:      req.body.designation,
+        department:       req.body.department,
+        phone:            req.body.phone,
+        address:          req.body.address,
+        dateOfBirth:      req.body.dateOfBirth ? new Date(req.body.dateOfBirth) : undefined,
+        salary:           req.body.salary      ? parseFloat(req.body.salary)    : undefined,
+        bankAccount:      req.body.bankAccount,
         emergencyContact: req.body.emergencyContact
       },
-      include: {
-        user: {
-          select: {
-            id: true,
-            name: true,
-            email: true,
-            avatar: true
-          }
-        }
-      }
+      include: { user: { select: { id: true, name: true, email: true, avatar: true } } }
     })
 
     return successResponse(res, 'Employee updated successfully', { employee: updated })
@@ -238,7 +200,6 @@ const getDepartments = async (req, res) => {
       by: ['department'],
       _count: { department: true }
     })
-
     return successResponse(res, 'Departments fetched successfully', { departments })
   } catch (err) {
     return errorResponse(res, err.message, 500)
